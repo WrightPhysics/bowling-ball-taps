@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bowling Ball Taps</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&display=swap" rel="stylesheet">
+<style>
+/* Layout idea: the floor (canvas) fills the left; a narrow control rail sits on the right and stacks below on small screens. */
+:root{
+  --bg:#f3f5fa;
+  --panel:#ffffff;
+  --floor:#fbfcfe;
+  --ink:#141a2b;
+  --muted:#5b6478;
+  --line:#d3d9e6;
+  --accent:#1e44b4;      /* worksheet blue */
+  --accent-ink:#ffffff;
+  --tap:#d2470b;         /* mallet taps */
+  --vel:#0a7d55;         /* velocity */
+  --ball:#1b2233;
+  --font: "Atkinson Hyperlegible", "Segoe UI", system-ui, -apple-system, Arial, sans-serif;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0e1220; --panel:#171c2e; --floor:#121728; --ink:#eef1f8; --muted:#9aa4bb;
+    --line:#2c3450; --accent:#7f9cff; --accent-ink:#0b1020; --tap:#ff8a4c; --vel:#3fd6a0; --ball:#e6e9f2;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0e1220; --panel:#171c2e; --floor:#121728; --ink:#eef1f8; --muted:#9aa4bb;
+  --line:#2c3450; --accent:#7f9cff; --accent-ink:#0b1020; --tap:#ff8a4c; --vel:#3fd6a0; --ball:#e6e9f2;
+  color-scheme: dark;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--ink);font-family:var(--font);font-size:16px;line-height:1.35}
+.app{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:16px;padding:16px;height:100%;max-width:1400px;margin:0 auto}
+.stage{display:flex;flex-direction:column;gap:10px;min-width:0;min-height:0}
+.head{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap}
+h1{font-size:1.35rem;margin:0;text-wrap:balance}
+.caption{color:var(--muted);font-size:1.05rem}
+.floorwrap{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;background:var(--floor);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+canvas{display:block;max-width:100%;max-height:100%}
+.rail{display:flex;flex-direction:column;gap:14px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px;overflow:auto}
+.group{display:flex;flex-direction:column;gap:8px}
+.label{font-size:.78rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:700}
+.scn{display:flex;align-items:center;gap:10px;width:100%;text-align:left;font:inherit;color:var(--ink);background:transparent;border:1.5px solid var(--line);border-radius:8px;padding:9px 10px;cursor:pointer}
+.scn .n{flex:none;width:26px;height:26px;border-radius:50%;display:grid;place-items:center;font-weight:700;border:1.5px solid var(--accent);color:var(--accent)}
+.scn[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:700}
+.scn[aria-pressed="true"] .n{border-color:var(--accent-ink);color:var(--accent-ink)}
+.row{display:flex;gap:8px;flex-wrap:wrap}
+.btn{flex:1;font:inherit;font-weight:700;padding:10px 12px;border-radius:8px;border:1.5px solid var(--accent);background:var(--accent);color:var(--accent-ink);cursor:pointer;min-width:90px}
+.btn.ghost{background:transparent;color:var(--accent)}
+.btn.tapbtn{border-color:var(--tap);color:var(--tap);background:transparent;flex-basis:100%}
+.btn:disabled{opacity:.4;cursor:default}
+button:focus-visible,input:focus-visible{outline:3px solid var(--vel);outline-offset:2px}
+.tiles{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.tile{border:1px solid var(--line);border-radius:8px;padding:8px 10px}
+.tile b{display:block;font-size:1.5rem;font-variant-numeric:tabular-nums}
+.tile span{font-size:.8rem;color:var(--muted)}
+label.chk{display:flex;align-items:center;gap:8px;cursor:pointer}
+label.chk input{width:18px;height:18px;accent-color:var(--accent)}
+.sw{display:inline-block;width:22px;height:4px;border-radius:2px;margin-left:auto}
+.sw.t{background:var(--tap)} .sw.v{background:var(--vel)} .sw.p{background:var(--muted)}
+input[type=range]{width:100%;accent-color:var(--accent)}
+.hint{font-size:.8rem;color:var(--muted)}
+@media (max-width:820px){
+  html,body{height:auto}
+  .app{grid-template-columns:1fr;height:auto}
+  .floorwrap{flex:none}
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <section class="stage">
+    <div class="head">
+      <h1>Bowling Ball Taps</h1>
+      <div class="caption" id="caption"></div>
+    </div>
+    <div class="floorwrap" id="wrap"><canvas id="cv" aria-label="Top view of a bowling ball rolling across the floor"></canvas></div>
+  </section>
+
+  <aside class="rail">
+    <div class="group" role="group" aria-label="Scenario">
+      <div class="label">Scenario</div>
+      <button class="scn" data-m="1" id="scn1"><span class="n">1</span>No taps</button>
+      <button class="scn" data-m="2" id="scn2"><span class="n">2</span>One tap to the right at A</button>
+      <button class="scn" data-m="3" id="scn3"><span class="n">3</span>Repeated taps to the right</button>
+      <button class="scn" data-m="4" id="scn4"><span class="n">4</span>Repeated taps toward the center</button>
+    </div>
+
+    <div class="group">
+      <div class="row">
+        <button class="btn" id="play">Play</button>
+        <button class="btn ghost" id="reset">Reset</button>
+        <button class="btn tapbtn" id="stoptap">Stop tapping</button>
+      </div>
+    </div>
+
+    <div class="tiles">
+      <div class="tile"><b id="rTaps">0</b><span>taps</span></div>
+      <div class="tile"><b id="rSpeed">1.00</b><span>speed ÷ starting speed</span></div>
+    </div>
+
+    <div class="group">
+      <div class="label">Show</div>
+      <label class="chk"><input type="checkbox" id="cTap" checked>Tap arrows<span class="sw t"></span></label>
+      <label class="chk"><input type="checkbox" id="cVel" checked>Velocity arrow<span class="sw v"></span></label>
+      <label class="chk"><input type="checkbox" id="cDots" checked>Position dots</label>
+      <label class="chk"><input type="checkbox" id="cPath" checked>Path<span class="sw p"></span></label>
+      <label class="chk"><input type="checkbox" id="cCen">Center of the circle</label>
+    </div>
+
+    <div class="group">
+      <div class="label">Playback</div>
+      <label class="chk"><input type="checkbox" id="cSlow">Slow motion</label>
+      <label for="nTap">Taps per quarter turn: <b id="nTapOut">9</b></label>
+      <input type="range" id="nTap" min="3" max="18" step="1" value="9">
+      <div class="hint">Fewer taps means each tap is harder. Keys: 1–4 scenario, Space play/pause, R reset, S stop tapping.</div>
+    </div>
+  </aside>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  var W=760,H=640,R=200,V0=150,BALL=17;
+  var A={x:150,y:240};               // math coords, y up
+  var cv=document.getElementById('cv'),ctx=cv.getContext('2d'),wrap=document.getElementById('wrap');
+  var $=function(id){return document.getElementById(id)};
+  var captions={
+    1:"No taps.",
+    2:"One tap to the right, at A.",
+    3:"A tap to the right at every dot, starting at A.",
+    4:"A tap toward the center of the circle at every dot, starting at A."
+  };
+  var mode=1,n=9,S,running=false,last=0,col={};
+
+  function geom(){
+    var th=(Math.PI/2)/n, edge=2*R*Math.sin(th/2);
+    var m=Math.floor((A.y-30)/edge);
+    return {th:th,edge:edge,T:edge/V0,m:m,dv:2*V0*Math.sin(th/2),
+            C:{x:A.x+R*Math.cos(th/2),y:A.y-R*Math.sin(th/2)},
+            start:{x:A.x,y:A.y-m*edge}};
+  }
+  function reset(){
+    var g=geom();
+    S={g:g,x:g.start.x,y:g.start.y,vx:0,vy:V0,toEvent:0,ev:0,taps:0,tapping:true,
+       dots:[],arrows:[],trails:[[]],recording:true,lastV:{x:g.start.x,y:g.start.y},
+       flash:null,done:false};
+    running=false; sync(); draw();
+  }
+  function fire(){
+    var g=S.g, idx=S.ev++;
+    var atA=idx>=g.m, tap=false, dx=0, dy=0;
+    if(S.tapping && atA){
+      if(mode===2 && idx===g.m){tap=true;dx=1;dy=0;}
+      else if(mode===3){tap=true;dx=1;dy=0;}
+      else if(mode===4){tap=true;var cx=g.C.x-S.x,cy=g.C.y-S.y,l=Math.hypot(cx,cy);dx=cx/l;dy=cy/l;}
+    }
+    if(S.recording){
+      if(S.dots.length<600) S.dots.push({x:S.x,y:S.y});
+      if(tap) S.trails[S.trails.length-1].push({x:S.x,y:S.y});
+      else if(S.trails[S.trails.length-1].length===0) S.trails[S.trails.length-1].push({x:S.x,y:S.y});
+    }
+    if(tap){
+      S.taps++;
+      S.vx+=dx*g.dv; S.vy+=dy*g.dv;
+      S.lastV={x:S.x,y:S.y};
+      if(S.recording) S.arrows.push({x:S.x,y:S.y,dx:dx,dy:dy});
+      S.flash={x:S.x,y:S.y,dx:dx,dy:dy,t:0};
+      if(mode===4 && S.taps===4*n) { /* next tap closes the lap */ }
+      if(mode===4 && S.taps===4*n+1){ S.arrows.pop(); S.dots.pop(); S.recording=false; }
+    }
+  }
+  function move(dt){S.x+=S.vx*dt;S.y+=S.vy*dt;}
+  function step(dt){
+    while(dt>=S.toEvent){move(S.toEvent);dt-=S.toEvent;fire();S.toEvent=S.g.T;}
+    move(dt);S.toEvent-=dt;
+    if(S.flash){S.flash.t+=dt;if(S.flash.t>0.35)S.flash=null;}
+    if(S.x<-40||S.x>W+40||S.y<-40||S.y>H+40){S.done=true;running=false;}
+  }
+  function stopTapping(){
+    if(!S.tapping) return;
+    S.tapping=false;
+    if(!S.recording){S.trails.push([{x:S.lastV.x,y:S.lastV.y}]);S.recording=true;}
+    sync();
+  }
+
+  /* ---------- drawing ---------- */
+  function readColors(){
+    var cs=getComputedStyle(document.documentElement);
+    ['floor','ink','muted','line','accent','tap','vel','ball'].forEach(function(k){col[k]=cs.getPropertyValue('--'+k).trim();});
+  }
+  function Y(y){return H-y;}
+  function arrow(x1,y1,x2,y2,c,w){
+    var a=Math.atan2(y2-y1,x2-x1),h=5+w*2.2;
+    ctx.strokeStyle=c;ctx.fillStyle=c;ctx.lineWidth=w;ctx.lineCap='round';
+    ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2-Math.cos(a)*h*0.8,y2-Math.sin(a)*h*0.8);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(x2,y2);
+    ctx.lineTo(x2-h*Math.cos(a-0.45),y2-h*Math.sin(a-0.45));
+    ctx.lineTo(x2-h*Math.cos(a+0.45),y2-h*Math.sin(a+0.45));ctx.closePath();ctx.fill();
+  }
+  function draw(){
+    readColors();
+    var g=S.g;
+    ctx.clearRect(0,0,W,H);
+    ctx.fillStyle=col.floor;ctx.fillRect(0,0,W,H);
+
+    // point A
+    ctx.fillStyle=col.ink;ctx.font='700 20px '+getComputedStyle(document.body).fontFamily;
+    ctx.textAlign='right';ctx.textBaseline='middle';
+    ctx.fillText('A',A.x-26,Y(A.y));
+    ctx.strokeStyle=col.muted;ctx.lineWidth=1.5;
+    ctx.beginPath();ctx.moveTo(A.x-20,Y(A.y));ctx.lineTo(A.x-9,Y(A.y));ctx.stroke();
+
+    // center
+    if($('cCen').checked){
+      ctx.strokeStyle=col.accent;ctx.fillStyle=col.accent;ctx.lineWidth=2;
+      var cx=g.C.x,cy=Y(g.C.y);
+      ctx.beginPath();ctx.moveTo(cx-8,cy);ctx.lineTo(cx+8,cy);ctx.moveTo(cx,cy-8);ctx.lineTo(cx,cy+8);ctx.stroke();
+      ctx.font='16px '+getComputedStyle(document.body).fontFamily;ctx.textAlign='left';
+      ctx.fillText('center',cx+12,cy);
+      if(mode===4 && S.tapping && S.ev>g.m){
+        ctx.setLineDash([5,6]);ctx.globalAlpha=.6;
+        ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(S.x,Y(S.y));ctx.stroke();
+        ctx.setLineDash([]);ctx.globalAlpha=1;
+      }
+    }
+
+    // path
+    if($('cPath').checked){
+      ctx.strokeStyle=col.muted;ctx.lineWidth=2.5;ctx.lineJoin='round';ctx.lineCap='round';
+      S.trails.forEach(function(tr,i){
+        if(!tr.length) return;
+        ctx.beginPath();ctx.moveTo(tr[0].x,Y(tr[0].y));
+        for(var k=1;k<tr.length;k++) ctx.lineTo(tr[k].x,Y(tr[k].y));
+        if(i===S.trails.length-1 && S.recording) ctx.lineTo(S.x,Y(S.y));
+        ctx.stroke();
+      });
+    }
+    // dots
+    if($('cDots').checked){
+      S.dots.forEach(function(d){
+        var x=d.x,y=Y(d.y),r=6.5,k=r*0.62;
+        ctx.fillStyle=col.floor;ctx.strokeStyle=col.ink;ctx.lineWidth=1.4;
+        ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.fill();ctx.stroke();
+        ctx.beginPath();ctx.moveTo(x-k,y-k);ctx.lineTo(x+k,y+k);ctx.moveTo(x-k,y+k);ctx.lineTo(x+k,y-k);ctx.stroke();
+      });
+    }
+    // tap arrows
+    if($('cTap').checked){
+      S.arrows.forEach(function(a){
+        arrow(a.x-a.dx*48,Y(a.y-a.dy*48),a.x-a.dx*10,Y(a.y-a.dy*10),col.tap,3.5);
+      });
+    }
+    // ball
+    var bx=S.x,by=Y(S.y);
+    ctx.fillStyle=col.ball;ctx.beginPath();ctx.arc(bx,by,BALL,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle=col.floor;
+    [[4,-6],[9,-1],[2,1]].forEach(function(p){ctx.beginPath();ctx.arc(bx+p[0],by+p[1],2.2,0,Math.PI*2);ctx.fill();});
+
+    // mallet
+    if(S.flash){
+      var f=S.flash,back=BALL+9+f.t*60;
+      var mx=bx-f.dx*back,my=by+f.dy*back;      // screen coords (dy flips)
+      ctx.save();ctx.translate(mx,my);ctx.rotate(Math.atan2(-f.dy,f.dx));
+      ctx.globalAlpha=Math.max(0,1-f.t/0.35);
+      ctx.fillStyle=col.tap;ctx.fillRect(-7,-13,14,26);
+      ctx.strokeStyle=col.tap;ctx.lineWidth=4;ctx.beginPath();ctx.moveTo(0,13);ctx.lineTo(0,58);ctx.stroke();
+      ctx.restore();
+    }
+    // velocity arrow
+    if($('cVel').checked){
+      var sc=62/V0;
+      arrow(bx,by,bx+S.vx*sc,by-S.vy*sc,col.vel,4);
+    }
+    $('rTaps').textContent=S.taps;
+    $('rSpeed').textContent=(Math.hypot(S.vx,S.vy)/V0).toFixed(2);
+  }
+
+  /* ---------- loop & UI ---------- */
+  function frame(t){
+    if(!running){return;}
+    var dt=Math.min(0.05,(t-last)/1000);last=t;
+    step(dt*($('cSlow').checked?0.35:1));
+    draw();
+    if(running) requestAnimationFrame(frame); else sync();
+  }
+  function play(){
+    if(S.done) reset();
+    running=!running;
+    if(running){last=performance.now();requestAnimationFrame(frame);}
+    sync();
+  }
+  function sync(){
+    $('play').textContent=running?'Pause':(S.done?'Play again':'Play');
+    $('caption').textContent=captions[mode];
+    for(var i=1;i<=4;i++) $('scn'+i).setAttribute('aria-pressed',String(i===mode));
+    var st=$('stoptap');
+    st.disabled=!(mode>=3 && S.tapping) || S.done;
+    st.textContent=(mode>=3 && !S.tapping)?'Tapping stopped':'Stop tapping';
+    $('nTapOut').textContent=n;
+  }
+  function setMode(m){mode=m;reset();}
+  function fit(){
+    var r=wrap.getBoundingClientRect();
+    var availW=r.width, availH=window.innerWidth<=820?Infinity:r.height;
+    var s=Math.min(availW/W,availH/H);
+    if(!isFinite(s)||s<=0) s=1;
+    var dpr=window.devicePixelRatio||1;
+    cv.style.width=Math.floor(W*s)+'px';cv.style.height=Math.floor(H*s)+'px';
+    cv.width=Math.round(W*s*dpr);cv.height=Math.round(H*s*dpr);
+    ctx.setTransform(s*dpr,0,0,s*dpr,0,0);
+    draw();
+  }
+
+  [1,2,3,4].forEach(function(i){$('scn'+i).addEventListener('click',function(){setMode(i);});});
+  $('play').addEventListener('click',play);
+  $('reset').addEventListener('click',reset);
+  $('stoptap').addEventListener('click',stopTapping);
+  ['cTap','cVel','cDots','cPath','cCen'].forEach(function(id){$(id).addEventListener('change',function(){draw();});});
+  $('nTap').addEventListener('input',function(e){n=+e.target.value;reset();});
+  document.addEventListener('keydown',function(e){
+    if(e.target.tagName==='INPUT'&&e.target.type==='range') return;
+    if(e.key>='1'&&e.key<='4'){setMode(+e.key);}
+    else if(e.key===' '){e.preventDefault();if(e.target.blur&&e.target.tagName==='BUTTON')e.target.blur();play();}
+    else if(e.key==='r'||e.key==='R'){reset();}
+    else if(e.key==='s'||e.key==='S'){stopTapping();}
+  });
+  window.addEventListener('resize',fit);
+  if(window.matchMedia) window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change',function(){draw();});
+  new MutationObserver(function(){draw();}).observe(document.documentElement,{attributes:true,attributeFilter:['data-theme']});
+
+  reset();fit();
+  if(document.fonts&&document.fonts.ready) document.fonts.ready.then(draw);
+})();
+</script>
+</body>
+</html>
