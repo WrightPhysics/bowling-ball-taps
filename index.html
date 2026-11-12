@@ -271,8 +271,9 @@ input[type=range]{width:100%;accent-color:var(--accent)}
       var mx=bx-f.dx*back,my=by+f.dy*back;      // screen coords (dy flips)
       ctx.save();ctx.translate(mx,my);ctx.rotate(Math.atan2(-f.dy,f.dx));
       ctx.globalAlpha=Math.max(0,1-f.t/0.35);
-      ctx.fillStyle=col.tap;ctx.fillRect(-7,-13,14,26);
       ctx.strokeStyle=col.tap;ctx.lineWidth=4;ctx.beginPath();ctx.moveTo(0,13);ctx.lineTo(0,58);ctx.stroke();
+      ctx.fillStyle='#000';ctx.fillRect(-7,-13,14,26);            // black head (outlined so it shows in dark mode)
+      ctx.strokeStyle=col.muted;ctx.lineWidth=1;ctx.strokeRect(-7.5,-13.5,15,27);
       ctx.restore();
     }
     // velocity arrow
